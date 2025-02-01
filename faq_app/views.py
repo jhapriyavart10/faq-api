@@ -19,24 +19,33 @@ class FAQViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = FAQ.objects.all()
-        lang = self.request.query_params.get('lang', 'en')
+        lang = self.request.query_params.get('lang', 'en')  # Default to 'en' if not provided
 
         valid_lang_fields = ['hi', 'bn']
 
+        # Validate the language code passed in the query parameters
         if lang not in valid_lang_fields and lang != 'en':
             raise ValidationError(f"Invalid language code '{lang}'. Supported languages are {valid_lang_fields + ['en']}.")
 
+        # Choose the correct field based on the language code
         lang_field = f'question_{lang}' if lang != 'en' else 'question'
+
+        # Filter the queryset based on the selected language
         queryset = queryset.filter(**{f'{lang_field}__isnull': False})
 
         return queryset
     
     def list(self, request, *args, **kwargs):
+        lang = request.query_params.get('lang', 'en')  # Default to 'en' if not provided
+        
+        # Pass the lang to the serializer context when instantiating the serializer
+        serializer = self.get_serializer(self.get_queryset(), many=True, context={'lang': lang})
+        
         try:
-            response = super().list(request, *args, **kwargs)
-            response['Content-Type'] = 'application/json; charset=utf-8'  
-            return response
+            # Return the serialized data as the response
+            return Response(serializer.data)
         except ValidationError as e:
+            # Handle any validation errors (e.g., invalid language code)
             return Response(
                 {"error": str(e)}, 
                 status=status.HTTP_400_BAD_REQUEST
